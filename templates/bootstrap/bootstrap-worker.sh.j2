@@ -1,0 +1,64 @@
+#!/bin/bash
+
+function log() {
+    echo "[$(date --iso-8601=seconds)] $1" >> /var/log/bootstrap-etcd.log
+}
+
+log "Starting Bootstrap"
+INTERNAL_IP=$(ip addr show eth1 | grep "inet " | awk '{print $2}' | cut -d / -f 1)
+while [ -z "$INTERNAL_IP" ]; do
+    log "Waiting 1 second for the network interface...";
+    sleep 1;
+    INTERNAL_IP=$(ip addr show eth1 | grep "inet " | awk '{print $2}' | cut -d / -f 1);
+done
+log "Network Interface Started"
+
+export INTERNAL_IP=$(ip addr show eth1 | grep 'inet ' | awk '{print $2}' | cut -d / -f 1)
+export INSTANCE=$(hostname --short)
+
+cd /var/lib/kubelet/
+
+{
+    /opt/startup/generate-certs-and-configs.sh
+    log "Certs and configs were generated successfully"
+} || {
+    log "Fail to generate certs and configs"
+    exit 1
+}
+
+{
+    mv -f ca* pki
+    mv -f worker*.pem pki
+    log "Certificates moved to directory pki" 
+} || {
+    log "Fail to move certificates to directory pki"
+    exit 1
+}
+
+{
+    mkdir -p /run/systemd/resolve
+    if [[ ! -f /run/systemd/resolve/resolv.conf ]]; then
+        ln -s /etc/resolv.conf /run/systemd/resolve/
+    fi
+    log "Created resolv.conf symlink" 
+} || {
+    log "Fail to created resolv.conf symlink"
+    exit 1
+}
+
+{
+    systemctl daemon-reload
+    log "Systemd services reloaded" 
+} || {
+    log "Fail to reload the systemd services"
+    exit 1
+}
+
+{
+    systemctl enable containerd kubelet
+    systemctl start containerd kubelet
+    log "Kubernetess worker started successfully"
+} || {
+    log "Kubernetess woker failed to start"
+    exit 1
+}

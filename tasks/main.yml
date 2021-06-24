@@ -1,0 +1,58 @@
+---
+- name: Worker - Installing kubernetes base packages
+  yum:
+    name: '{{ item }}'
+    state: latest
+  loop:
+    '{{ worker_dependencies }}'
+
+- name: Worker - Adding kernel modules
+  modprobe:
+    name: '{{ item }}'
+    state: present
+  loop: '{{ modules }}'   
+  when: modules is defined
+
+- name: Worker - Create directories
+  file:
+    path: '{{ item }}'
+    state: directory
+    mode: '0755'
+  loop:
+    '{{ worker_directories }}'
+
+- name: Worker - Download kubernetes binary files
+  get_url:
+    url: '{{ k8s_bin_url + k8s_version + item }}'
+    dest: /usr/local/bin/
+    mode: '0755'
+  loop: 
+    '{{ worker_kube_bin }}'
+
+- name: Worker - Download cert binary files
+  get_url:
+    url: '{{ item }}'
+    dest: /usr/local/bin/
+    mode: '0755'
+  loop: 
+    '{{ worker_cert_bin }}'
+
+- name: Worker - Adding configuration, startup and service files
+  template:
+    src: '{{ item.src }}'
+    dest: '{{ item.dst + item.src.split("/")[1].split(".")[0] + "." + item.src.split("/")[1].split(".")[1] }}'
+    owner: root
+    mode: '0750' 
+  loop:
+    '{{ worker_templates }}'
+
+- name: Worker - Remove swap from fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^#? ?(.*swap.*$)'
+    replace: '# \1'
+
+- name: Worker - Set the KUBECONFIG variable
+  copy:
+    dest: /etc/profile.d/kubeconfig.sh
+    content: 'export KUBECONFIG=/var/lib/kubelet/kubeconfig'
