@@ -5,16 +5,24 @@ function log() {
 }
 
 log "Starting Bootstrap"
-INTERNAL_IP=$(ip addr show eth1 | grep "inet " | awk '{print $2}' | cut -d / -f 1)
+INTERNAL_IP=$(ip addr show $INTERFACE | grep "inet " | awk '{print $2}' | cut -d / -f 1)
 while [ -z "$INTERNAL_IP" ]; do
     log "Waiting 1 second for the network interface...";
     sleep 1;
-    INTERNAL_IP=$(ip addr show eth1 | grep "inet " | awk '{print $2}' | cut -d / -f 1);
+    INTERNAL_IP=$(ip addr show $INTERFACE | grep "inet " | awk '{print $2}' | cut -d / -f 1);
 done
 log "Network Interface Started"
 
-export INTERNAL_IP=$(ip addr show eth1 | grep 'inet ' | awk '{print $2}' | cut -d / -f 1)
+export INTERNAL_IP=$(ip addr show $INTERFACE | grep 'inet ' | awk '{print $2}' | cut -d / -f 1)
 export INSTANCE=$(hostname --short)
+
+{
+    /opt/startup/generate-services.sh
+    log "Services were generated successfully"
+} || {
+    log "Fail to generate services"
+    exit 1
+}
 
 cd /var/lib/kubelet/
 
