@@ -1,58 +1,84 @@
 ---
-- name: Worker - Installing kubernetes base packages
+- name: Installing kubernetes base packages
   yum:
     name: '{{ item }}'
     state: latest
   loop:
-    '{{ worker_dependencies }}'
+    - "conntrack"
+    - "ipset"
+    - "socat"
 
-- name: Worker - Adding kernel modules
+- name: Adding kernel modules
   modprobe:
     name: '{{ item }}'
     state: present
-  loop: '{{ modules }}'   
-  when: modules is defined
+  loop:
+    - nf_conntrack
 
-- name: Worker - Create directories
+- name: Create directories
   file:
     path: '{{ item }}'
     state: directory
     mode: '0755'
   loop:
-    '{{ worker_directories }}'
+    - "/var/lib/kubelet/pki"
+    - "/opt/bootstrap-scripts"
+    - "/opt/templates"
+    - "/run/systemd/resolve"
+    - "/etc/kubernetes/manifests"
 
-- name: Worker - Download kubernetes binary files
+- name: Download kubernetes binary files
   get_url:
     url: '{{ k8s_bin_url + k8s_version + item }}'
     dest: /usr/local/bin/
     mode: '0755'
   loop: 
-    '{{ worker_kube_bin }}'
+    - "/kubelet"
+    - "/kubectl"
 
-- name: Worker - Download cert binary files
+- name: Download cert binary files
   get_url:
     url: '{{ item }}'
     dest: /usr/local/bin/
     mode: '0755'
   loop: 
-    '{{ worker_cert_bin }}'
+    '{{ kubelet_cert_bin }}'
 
-- name: Worker - Adding configuration, startup and service files
+- name: Copy kubelet config/service files
+  copy:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+  loop:
+    - { src: "config/kubelet-config.yaml.j2", dest: "/opt/templates/" }
+    - { src: "config/kubelet.service.j2", dest: "/opt/templates/" }
+    - { src: "config/sysctl.conf", dest: "/etc/" }
+
+- name: Adding configuration, startup and service files
   template:
     src: '{{ item.src }}'
-    dest: '{{ item.dst + item.src.split("/")[1].split(".")[0] + "." + item.src.split("/")[1].split(".")[1] }}'
+    dest: '{{ item.dest + item.src.split("/")[1].split(".")[0] + "." + item.src.split("/")[1].split(".")[1] }}'
     owner: root
     mode: '0750' 
   loop:
-    '{{ worker_templates }}'
+    - { src: "bootstrap/bootstrap-kubelet.sh.j2", dest: "/opt/bootstrap-scripts/" }
+    - { src: "bootstrap/generate-certs-and-configs.sh.j2", dest: "/opt/bootstrap-scripts/" }
 
-- name: Worker - Remove swap from fstab
+- name: Remove swap from fstab
   ansible.builtin.replace:
     path: /etc/fstab
     regexp: '^#? ?(.*swap.*$)'
     replace: '# \1'
 
-- name: Worker - Set the KUBECONFIG variable
+- name: Set the KUBECONFIG variable
   copy:
     dest: /etc/profile.d/kubeconfig.sh
     content: 'export KUBECONFIG=/var/lib/kubelet/kubeconfig'
+  when: node_role == "worker"
+
+- name: Create symbolic links
+  ansible.builtin.file:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+    state: link
+  loop:
+    - { src: "/etc/resolv.conf", dest: "/run/systemd/resolve/resolv.conf" }

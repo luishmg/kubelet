@@ -1,0 +1,102 @@
+#!/bin/bash
+
+function log() {
+    echo "[$(date --iso-8601=seconds)] $1" >> /var/log/bootstrap-kubelet.log
+}
+
+log "Starting Bootstrap"
+
+while ! $(ethtool $INTERFACE | grep -q "Link detected: yes"); do
+    sleep 1
+    log "Waiting 1 second for the network interface...";
+done
+
+INTERNAL_IP=$(ip addr show $INTERFACE | grep "inet " | awk '{print $2}' | cut -d / -f 1)
+while [ -z "$INTERNAL_IP" ]; do
+    log "Waiting 1 second for the network interface...";
+    sleep 1;
+    export INTERNAL_IP=$(ip addr show $INTERFACE | grep "inet " | awk '{print $2}' | cut -d / -f 1);
+done
+log "Network Interface Started"
+
+export INSTANCE=$(hostname --short)
+
+{
+    pyrender /opt/templates/kubelet.service.j2 \
+        --set hostname_override=$INSTANCE \
+        --set taint_list=$TAINT_LIST \
+        --set node_labels=$NODE_LABELS \
+        --set kubelet_log_level=$LOG_LEVEL \
+        --output /etc/systemd/system/kubelet.service \
+        2>> /var/log/bootstrap-kubelet.log && \
+    log "Services were generated successfully"
+} || {
+    log "Fail to generate services"
+    exit 1
+}
+
+cd /var/lib/kubelet/
+
+{
+    /opt/bootstrap-scripts/generate-certs-and-configs.sh \
+    2>> /var/log/bootstrap-kubelet.log && \
+    log "Certs were generated successfully"
+} || {
+    log "Fail to generate certs"
+    exit 1
+}
+
+{
+    pyrender /opt/templates/kubelet-config.yaml.j2 \
+        --set cluster_dns=$CLUSTER_DNS \
+        --set instance=$INSTANCE \
+        --output /var/lib/kubelet/kubelet-config.yaml \
+        2>> /var/log/bootstrap-kubelet.log && \
+    log "kubelet-config was generated successfully"
+} || {
+    log "Fail to generate configs"
+    exit 1
+}
+
+{
+    mv -f ca* pki \
+    2>> /var/log/bootstrap-kubelet.log && \
+    mv -f $INSTANCE*.pem pki \
+    2>> /var/log/bootstrap-kubelet.log && \
+    log "Certificates moved to directory pki" 
+} || {
+    log "Fail to move certificates to directory pki"
+    exit 1
+}
+
+{
+    systemctl daemon-reload && \
+    log "Systemd services reloaded" 
+} || {
+    log "Fail to reload the systemd services"
+    exit 1
+}
+
+{
+    systemctl enable containerd kubelet && \
+    systemctl start containerd kubelet && \
+    log "Kubernetess worker started successfully"
+} || {
+    log "Kubernetess woker failed to start"
+    exit 1
+}
+
+
+log "Labeling Node"
+{% if node_role == "master" -%}
+{
+    while [ $(kubectl get nodes | grep $(hostname --short) | awk '{ print $2 }') != 'Ready' ]; do
+        sleep 1
+        log "Node not ready waiting..."
+    done
+    kubectl label node $(hostname --short) node-role.kubernetes.io/master=master && \
+    log "Node labeled as master successfully"
+} || {
+    log "Failed to label node"
+}
+{%- endif %}
