@@ -1,20 +1,4 @@
 ---
-- name: Installing kubernetes base packages
-  yum:
-    name: '{{ item }}'
-    state: latest
-  loop:
-    - "conntrack"
-    - "ipset"
-    - "socat"
-
-- name: Adding kernel modules
-  modprobe:
-    name: '{{ item }}'
-    state: present
-  loop:
-    - nf_conntrack
-
 - name: Create directories
   file:
     path: '{{ item }}'
@@ -27,27 +11,19 @@
     - "/run/systemd/resolve"
     - "/etc/kubernetes/manifests"
 
-- name: Download kubernetes binary files
-  get_url:
-    url: '{{ k8s_bin_url + k8s_version + item }}'
-    dest: /usr/local/bin/
-    mode: '0755'
-  loop: 
-    - "/kubelet"
-    - "/kubectl"
-
 - name: Download cert binary files
   get_url:
-    url: '{{ item }}'
-    dest: /usr/local/bin/
-    mode: '0755'
+    url: "{{ item.url }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
   loop: 
-    '{{ kubelet_cert_bin }}'
+    '{{ downloads }}'
 
 - name: Copy kubelet config/service files
   copy:
-    src: '{{ item.src }}'
-    dest: '{{ item.dest }}'
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "640"
   loop:
     - { src: "config/kubelet-config.yaml.j2", dest: "/opt/templates/" }
     - { src: "config/kubelet.service.j2", dest: "/opt/templates/" }
@@ -55,10 +31,10 @@
 
 - name: Adding configuration, startup and service files
   template:
-    src: '{{ item.src }}'
-    dest: '{{ item.dest + item.src.split("/")[1].split(".")[0] + "." + item.src.split("/")[1].split(".")[1] }}'
+    src: "{{ item.src }}"
+    dest: "{{ item.dest + item.src.split('/')[-1].split('.')[0] + '.' + item.src.split('/')[-1].split('.')[1] }}"
     owner: root
-    mode: '0750' 
+    mode: "0750" 
   loop:
     - { src: "bootstrap/bootstrap-kubelet.sh.j2", dest: "/opt/bootstrap-scripts/" }
     - { src: "bootstrap/generate-certs-and-configs.sh.j2", dest: "/opt/bootstrap-scripts/" }
@@ -72,13 +48,13 @@
 - name: Set the KUBECONFIG variable
   copy:
     dest: /etc/profile.d/kubeconfig.sh
-    content: 'export KUBECONFIG=/var/lib/kubelet/kubeconfig'
+    content: "export KUBECONFIG=/var/lib/kubelet/kubeconfig"
   when: node_role == "worker"
 
 - name: Create symbolic links
   ansible.builtin.file:
-    src: '{{ item.src }}'
-    dest: '{{ item.dest }}'
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     state: link
   loop:
     - { src: "/etc/resolv.conf", dest: "/run/systemd/resolve/resolv.conf" }

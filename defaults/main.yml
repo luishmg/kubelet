@@ -1,3 +1,24 @@
-kubelet_cert_bin:
-  - "http://192.168.1.73:8000/cfssl/1.4.1/cfssl"
-  - "http://192.168.1.73:8000/cfssl/1.4.1/cfssljson"
+k8s_defaul_url: "https://storage.googleapis.com/kubernetes-release/release/"
+cfssl_default_url: "https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/"
+
+cfssl_url: "{{ cfssl_full_url|default(cfssl_default_url + cert_version + '/linux/cfssl') }}"
+cfssljson_url: "{{ cfssljson_full_url|default(cfssl_default_url + cert_version + '/linux/cfssljson') }}"
+kubectl_url: "{{ kubectl_full_url|default(k8s_defaul_url + k8s_version + '/bin/linux/amd64/kubectl') }}"
+kubelet_url: "{{ kubelet_full_url|default(k8s_defaul_url + k8s_version + '/bin/linux/amd64/kubelet') }}"
+downloads:
+  - name: cfssl
+    url: "{{ cfssl_url }}"
+    dest: "/usr/local/bin/"
+    mode: "0755"
+  - name: cfssljson
+    url: "{{ cfssljson_url }}"
+    dest: "/usr/local/bin/"
+    mode: "0755"
+  - name: kubectl
+    url: "{{ kubectl_url }}"
+    dest: "/usr/local/bin/"
+    mode: "0755"
+  - name: kubelet
+    url: "{{ kubelet_url }}"
+    dest: "/usr/local/bin/"
+    mode: "0755"

@@ -59,6 +59,7 @@ cd /var/lib/kubelet/
 }
 
 {
+    # Delete ca-key.pem
     mv -f ca* pki \
     2>> /var/log/bootstrap-kubelet.log && \
     mv -f $INSTANCE*.pem pki \
@@ -90,11 +91,19 @@ cd /var/lib/kubelet/
 log "Labeling Node"
 {% if node_role == "master" -%}
 {
-    while [ $(kubectl get nodes | grep $(hostname --short) | awk '{ print $2 }') != 'Ready' ]; do
-        sleep 1
-        log "Node not ready waiting..."
+    count = 0
+    while true ; do
+        kubectl label node $INSTANCE node-role.kubernetes.io/master=master 2>> /var/log/bootstrap-kubelet.log
+        if [ $? -eq 0 ]; then
+            break
+        elif [ $count -gt 60 ]; then
+            break
+        else
+            sleep 1
+            ((count++))
+            log "Node not ready waiting..."
+        fi
     done
-    kubectl label node $(hostname --short) node-role.kubernetes.io/master=master && \
     log "Node labeled as master successfully"
 } || {
     log "Failed to label node"

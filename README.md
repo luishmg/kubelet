@@ -65,6 +65,34 @@ Including an example of how to use your role (for instance, with variables passe
             - "http://192.168.1.73:8000/cfssl/1.4.1/cfssl"
             - "http://192.168.1.73:8000/cfssl/1.4.1/cfssljson"
 
+Customize and Test
+------------------
+
+To customize this role you should install pipenv, then follow the steps bellow:
+
+This command will install the correct version of python and the dependencies, as a virtual environment:
+
+`pipenv install`
+
+This command will load the virtual environment:
+
+`pipenv shell`
+
+Now if you want to follow the TDD patter you should go to the molecule folder and create the test for the change that you want to implement, to run the molecule full test use the command below:
+
+`molecule test`
+
+Tips to speedup the tests
+-------------------------
+
+As a side note you can just use the command below to run your role:
+
+`molecule converge`
+
+Then you can use this command to run the choosen test suit:
+
+`molecule verify`
+
 License
 -------
 
