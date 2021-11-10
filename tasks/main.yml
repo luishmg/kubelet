@@ -28,6 +28,8 @@
     - { src: "config/kubelet-config.yaml.j2", dest: "/opt/templates/" }
     - { src: "config/kubelet.service.j2", dest: "/opt/templates/" }
     - { src: "config/sysctl.conf", dest: "/etc/" }
+  loop_control:
+    label: "{{ item.src }}"
 
 - name: Adding configuration, startup and service files
   template:
@@ -38,6 +40,8 @@
   loop:
     - { src: "bootstrap/bootstrap-kubelet.sh.j2", dest: "/opt/bootstrap-scripts/" }
     - { src: "bootstrap/generate-certs-and-configs.sh.j2", dest: "/opt/bootstrap-scripts/" }
+  loop_control:
+    label: "{{ item.src }}"
 
 - name: Remove swap from fstab
   ansible.builtin.replace:
@@ -58,3 +62,5 @@
     state: link
   loop:
     - { src: "/etc/resolv.conf", dest: "/run/systemd/resolve/resolv.conf" }
+  loop_control:
+    label: "{{ item.src }}"
